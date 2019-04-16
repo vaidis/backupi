@@ -1,5 +1,5 @@
 # BackuPI
-backpi is a imple backup script used with cron to sync remote folders with a usb stick using smb or ssh
+backpi is a simple backup script used with cron to sync remote folders with a usb stick using smb or ssh
 
 ## crontab settings
 ```
