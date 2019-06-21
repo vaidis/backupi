@@ -8,15 +8,8 @@
 # Simple backup script used with cron to sync a remote folder with a usb stick using smb or ssh
 #
 
-mail_from="from@example.com"
-mail_to="to@example.com"
-mail_header="Subject: Backup Report"
-mail_auth_user="myuser"
-mail_auth_pass="mypass"
-mail_server_host="mail.example.com"
-mail_server_port="2525"
-
 function log() {
+    echo -e "`date +'%d/%m/%Y %H:%M:%S'` | $1"
     echo -e "`date +'%d/%m/%Y %H:%M:%S'` | $1" >> $LOGFILE
 }
 
@@ -26,6 +19,8 @@ function usage() {
     echo
     echo -e "backup.sh --proto=smb --host=192.168.1.220 --dir=backup --user=filio --pass=1234 --delete=yes"
     echo -e "backup.sh --proto=ssh --host=192.168.1.2 --dir=/home/ste/Documents --user=admin"
+    echo
+    exit
 }
 
 function mount_smb() { 
@@ -248,8 +243,22 @@ while [ "$1" != "" ]; do
     shift
 done
 
+[ -z "$TITLE" ] && usage "missing \e[91m'--title'\e[39m option"
+[ -z "$PROTO" ] && usage "missing \e[91m'--proto'\e[39m option"
+[ -z "$HOST" ] && usage "missing \e[91m'--host'\e[39m option"
+[ -z "$DIR" ] && usage "missing \e[91m'--dir'\e[39m option"
+[ -z "$USER" ] && usage "missing \e[91m'--user'\e[39m option"
+
 LOG="/root/backup"
-LOGFILE=${LOG}_${TITLE}.log
+LOGFILE="${LOG}_${TITLE}.log"
+mail_from="from@example.com"
+mail_to="to@example.com"
+mail_header="Subject: Backup Report"
+mail_auth_user="myuser"
+mail_auth_pass="mypass"
+mail_server_host="mail.example.com"
+mail_server_port="2525"
+
 echo > $LOGFILE
 if mount_remote; then
     if mount_usb; then
