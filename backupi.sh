@@ -14,6 +14,7 @@ function log() {
 }
 
 function usage() {
+    echo $1
     echo
     echo -e "backup.sh --proto=[smb|ssh] --host=[address] --dir=[source dir] --user=[username] --pass=[password]"
     echo
@@ -76,7 +77,7 @@ function copy_files() {
         log "[ OK ] found dir /mnt/$SRC"
         cd /mnt/$SRC
         log "------- BACKUP STARTED --------"
-
+        ls -l /mnt/usb/backup
         if [ "$DELETE" == "yes" ]; then
             rsync -av --stats \
                       --temp-dir=/tmp \
@@ -85,15 +86,15 @@ function copy_files() {
                       --no-group \
                       --exclude '.*' \
                       --delete \
-                      ./ /mnt/usb/backup >> $LOGFILE
+                      ./ /mnt/usb/backup | tee $LOGFILE
         else
-            rsync -av -e "ssh -c arcfour" \
-                      --stats \
+            #rsync -av -e "ssh -c arcfour" \
+            rsync -av --stats \
                       --temp-dir=/tmp \
                       --human-readable \
                       --no-owner \
                       --no-group \
-                      ./ /mnt/usb/backup >> $LOGFILE
+                      ./ /mnt/usb/backup | tee $LOGFILE
         fi
 
         echo >> $LOGFILE
@@ -118,7 +119,7 @@ function umount_usb() {
     log " USB : ${USBUSAGE} from ${USBTOTAL}"
     log " USB : used: ${USBUSED}  / free: ${USBFREE}"
 
-    cp $LOGFILE /mnt/usb
+    cp $LOGFILE /mnt/usb/
 
     umount /dev/sd[a-z]1 -l &> /dev/null
     umount /mnt/usb      -l &> /dev/null
@@ -138,15 +139,31 @@ function umount_usb() {
 }
 
 function send_mail() {
-    swaks --body $LOGFILE \
-    --from "$mail_from" \
-    --to "$mail_to" \
-    --header "$mail_header" \
-    --server "$mail_server_host:$mail_server_port" \
-    --auth LOGIN \
-    --auth-user "$mail_auth_user" \
-    --auth-password "$mail_auth_pass" \
-    -tls
+
+    cat $LOGFILE | s-nail -v \
+        -r "$mail_from" \
+        -s "Backup Report" \
+        -S mta=smtps://$mail_server_host:$mail_server_port \
+        -S smtp-use-starttls \
+        -S smtp-auth=login \
+        -S smtp-auth-user="$mail_auth_user" \
+        -S smtp-auth-password="$mail_auth_pass" \
+        -S ssl-verify=ignore \
+        "$mail_to"
+     
+    # swaks stop working with the 
+    # new siteground shared accounts settings
+    #
+    #    swaks --body $LOGFILE \
+    #    --from "$mail_from" \
+    #    --to "$mail_to" \
+    #    --header "$mail_header" \
+    #    --server "$mail_server_host:$mail_server_port" \
+    #    --auth LOGIN \
+    #    --auth-user "$mail_auth_user" \
+    #    --auth-password "$mail_auth_pass" \
+    #    -tls
+
 }
 
 function mount_remote() {
@@ -176,23 +193,16 @@ function mount_remote() {
     fi
 }
 
-function usb_mount() {
-    if mount_usb; then
-        echo "ls -l /mnt/usb"
-        ls -l /mnt/usb
-    else
-        echo -e "[FAIL] mount usb disk, check if is already mounted or used"
-    fi
-}
 
-function usb_umount() {
-    if umount /mnt/usb; then
-        echo "ls -l /mnt/usb"
-        ls -l /mnt/usb
-    else
-        echo -e "[FAIL] umount usb disk"
+commands=(rsync sshfs swaks)
+for command in "${commands[@]}"
+do
+    if ! command -v ${command} > /dev/null; then
+        echo -e "Command \e[96m$command\e[39m not found"
+
+        exit
     fi
-}
+done
 
 SRC=$$
 mkdir /mnt/$SRC
@@ -243,21 +253,24 @@ while [ "$1" != "" ]; do
     shift
 done
 
-[ -z "$TITLE" ] && usage "missing \e[91m'--title'\e[39m option"
-[ -z "$PROTO" ] && usage "missing \e[91m'--proto'\e[39m option"
-[ -z "$HOST" ] && usage "missing \e[91m'--host'\e[39m option"
-[ -z "$DIR" ] && usage "missing \e[91m'--dir'\e[39m option"
-[ -z "$USER" ] && usage "missing \e[91m'--user'\e[39m option"
+[ -z "$TITLE" ] && echo -e "missing \e[91m--title\e[39m option" && exit
+[ -z "$PROTO" ] && echo -e "missing \e[91m--proto\e[39m option" && exit
+[ -z "$HOST" ] && echo -e "missing \e[91m--host\e[39m option" && exit
+[ -z "$DIR" ] && echo -e "missing \e[91m--dir\e[39m option" && exit
+[ -z "$USER" ] && echo -e "missing \e[91m--user\e[39m option" && exit
+if [ "$PROTO" = "smb" ];  then 
+    [ -z "$PASS" ] && echo -e "missing \e[91m--pass\e[39m option" && exit
+fi
 
 LOG="/root/backup"
 LOGFILE="${LOG}_${TITLE}.log"
-mail_from="from@example.com"
-mail_to="to@example.com"
+mail_from="backup@mycompany.org"
+mail_to="admin@gmail.com"
 mail_header="Subject: Backup Report"
-mail_auth_user="myuser"
-mail_auth_pass="mypass"
-mail_server_host="mail.example.com"
-mail_server_port="2525"
+mail_auth_user="backup@mycompany.org"
+mail_auth_pass="abc123"
+mail_server_host="xyz123.siteground.eu"
+mail_server_port="465"
 
 echo > $LOGFILE
 if mount_remote; then
@@ -272,4 +285,4 @@ fi
 
 umount_usb
 send_mail
-  
+ 
